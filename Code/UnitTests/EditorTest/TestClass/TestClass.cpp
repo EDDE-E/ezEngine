@@ -118,7 +118,7 @@ ezResult ezEditorTest::InitializeTest()
 
     pDevice->Init();
 
-    if (pDevice->GetCapabilities().m_sAdapterName == "Microsoft Basic Render Driver")
+    if (pDevice->GetCapabilities().m_sAdapterName == "Microsoft Basic Render Driver" || pDevice->GetCapabilities().m_sAdapterName.StartsWith_NoCase("Intel(R) UHD Graphics"))
     {
       s_bIsReferenceDriver = true;
     }
@@ -260,9 +260,8 @@ void ezEditorTest::ExecuteDocumentAction(const char* szActionName, ezDocument* p
 
 ezResult ezEditorTest::CaptureImage(ezQtDocumentWindow* pWindow, const char* szImageName)
 {
-  ezStringBuilder sImgPath;
-  // TODO: fix this
-  sImgPath.Format("D:/{}.tga", szImageName);
+  ezStringBuilder sImgPath = ezTestFramework::GetInstance()->GetAbsOutputPath();
+  sImgPath.AppendFormat("{}.tga", szImageName);
 
   ezOSFile::DeleteFile(sImgPath);
 

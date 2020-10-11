@@ -6,17 +6,55 @@
 #include <Foundation/Math/Declarations.h>
 #include <Foundation/Threading/AtomicInteger.h>
 #include <Foundation/Types/Types.h>
+#include <Foundation/Types/VariantType.h>
+
+#include <Foundation/Reflection/Implementation/DynamicRTTI.h>
 #include <Foundation/Utilities/ConversionUtils.h>
 
-class ezReflectedClass;
-class ezVariant;
-struct ezTime;
-class ezUuid;
-struct ezStringView;
 
-using ezDataBuffer = ezDynamicArray<ezUInt8>;
-using ezVariantArray = ezDynamicArray<ezVariant>;
-using ezVariantDictionary = ezHashTable<ezString, ezVariant>;
+
+class ezRTTI;
+
+struct ezTypedObject
+{
+  EZ_DECLARE_POD_TYPE();
+  const void* m_pObject = nullptr;
+  const ezRTTI* m_pType = nullptr;
+
+  bool operator==(const ezTypedObject& rhs) const
+  {
+    return m_pObject == rhs.m_pObject;
+  }
+  bool operator!=(const ezTypedObject& rhs) const
+  {
+    return m_pObject != rhs.m_pObject;
+  }
+};
+
+struct ezTypedPointer
+{
+  EZ_DECLARE_POD_TYPE();
+  void* m_pObject = nullptr;
+  const ezRTTI* m_pType = nullptr;
+
+  ezTypedPointer() = default;
+  ezTypedPointer(void* pObject, const ezRTTI* pType)
+    : m_pObject(pObject)
+    , m_pType(pType)
+  {
+  }
+
+  bool operator==(const ezTypedPointer& rhs) const
+  {
+    return m_pObject == rhs.m_pObject;
+  }
+  bool operator!=(const ezTypedPointer& rhs) const
+  {
+    return m_pObject != rhs.m_pObject;
+  }
+};
+
+
 
 /// \brief ezVariant is a class that can store different types of variables, which is useful in situations where it is not clear up front,
 /// which type of data will be passed around.
@@ -28,81 +66,10 @@ using ezVariantDictionary = ezHashTable<ezString, ezVariant>;
 class EZ_FOUNDATION_DLL ezVariant
 {
 public:
-  /// \brief This enum describes the type of data that is currently stored inside the variant.
-  struct Type
-  {
-    using StorageType = ezUInt8;
-    /// \brief This enum describes the type of data that is currently stored inside the variant.
-    /// Note that changes to this enum require an increase of the reflection version and either
-    /// patches to the serializer or a re-export of binary data that contains ezVariants.
-    enum Enum : ezUInt8
-    {
-      Invalid = 0, ///< The variant stores no (valid) data at the moment.
-
-      /// *** Types that are flagged as 'StandardTypes' (see DetermineTypeFlags) ***
-      FirstStandardType = 1,
-      Bool,       ///< The variant stores a bool.
-      Int8,       ///< The variant stores an ezInt8.
-      UInt8,      ///< The variant stores an ezUInt8.
-      Int16,      ///< The variant stores an ezInt16.
-      UInt16,     ///< The variant stores an ezUInt16.
-      Int32,      ///< The variant stores an ezInt32.
-      UInt32,     ///< The variant stores an ezUInt32.
-      Int64,      ///< The variant stores an ezInt64.
-      UInt64,     ///< The variant stores an ezUInt64.
-      Float,      ///< The variant stores a float.
-      Double,     ///< The variant stores a double.
-      Color,      ///< The variant stores an ezColor.
-      Vector2,    ///< The variant stores an ezVec2.
-      Vector3,    ///< The variant stores an ezVec3.
-      Vector4,    ///< The variant stores an ezVec4.
-      Vector2I,   ///< The variant stores an ezVec2I32.
-      Vector3I,   ///< The variant stores an ezVec3I32.
-      Vector4I,   ///< The variant stores an ezVec4I32.
-      Vector2U,   ///< The variant stores an ezVec2U32.
-      Vector3U,   ///< The variant stores an ezVec3U32.
-      Vector4U,   ///< The variant stores an ezVec4U32.
-      Quaternion, ///< The variant stores an ezQuat.
-      Matrix3,    ///< The variant stores an ezMat3. A heap allocation is required to store this data type.
-      Matrix4,    ///< The variant stores an ezMat4. A heap allocation is required to store this data type.
-      Transform,  ///< The variant stores an ezTransform. A heap allocation is required to store this data type.
-      String,     ///< The variant stores a string. A heap allocation is required to store this data type.
-      StringView, ///< The variant stores an ezStringView.
-      DataBuffer, ///< The variant stores an ezDataBuffer, a typedef to DynamicArray<ezUInt8>. A heap allocation is required to store this
-                  ///< data type.
-      Time,       ///< The variant stores an ezTime value.
-      Uuid,       ///< The variant stores an ezUuid value.
-      Angle,      ///< The variant stores an ezAngle value.
-      ColorGamma, ///< The variant stores an ezColorGammaUB value.
-      LastStandardType,
-      /// *** Types that are flagged as 'StandardTypes' (see DetermineTypeFlags) ***
-
-      FirstExtendedType = 64,
-      VariantArray,      ///< The variant stores an array of ezVariant's. A heap allocation is required to store this data type.
-      VariantDictionary, ///< The variant stores a dictionary (hashmap) of ezVariant's. A heap allocation is required to store this data
-                         ///< type.
-      ReflectedPointer,  ///< The variant stores a pointer to a dynamically reflected object.
-      VoidPointer,       ///< The variant stores a void pointer.
-      LastExtendedType,  ///< Number of values for ezVariant::Type.
-
-      MAX_ENUM_VALUE = LastExtendedType,
-      Default = Invalid ///< Default value used by ezEnum.
-    };
-  };
-
-  /// \brief A helper struct to convert the C++ type, which is passed as the template argument, into one of the ezVariant::Type enum values.
-  template <typename T>
-  struct TypeDeduction
-  {
-    enum
-    {
-      value = Type::Invalid,
-      forceSharing = false,
-      hasReflectedMembers = false
-    };
-
-    using StorageType = T;
-  };
+  using Type = ezVariantType;
+  template<typename T>
+  using TypeDeduction = ezVariantTypeDeduction<T>;
+  
 
   /// \brief Initializes the variant to be 'Invalid'
   ezVariant(); // [tested]
@@ -154,10 +121,25 @@ public:
 
   ezVariant(const ezVariantArray& value);
   ezVariant(const ezVariantDictionary& value);
-  ezVariant(ezReflectedClass* value);
-  ezVariant(const ezReflectedClass* value);
-  ezVariant(void* value);
-  ezVariant(const void* value);
+
+  ezVariant(const ezTypedPointer& value);
+  ezVariant(const ezTypedObject& value);
+
+  //template<typename T>
+  //ezVariant(T& value);
+  template<typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::ObjectCast, int> = 0>
+  ezVariant(const T& value);
+
+  //template<typename T>
+  //ezVariant(T* value);
+  template<typename T>
+  ezVariant(const T* value);
+
+  ezVariant(void* value, const ezRTTI* pType);
+  ezVariant(const void* value, const ezRTTI* pType);
+
+  void CopyTypedObject(const void* value, const ezRTTI* pType);
+  void MoveTypedObject(void* value, const ezRTTI* pType);
 
   /// \brief If necessary, this will deallocate any heap memory that is not in use any more.
   ~ezVariant();
@@ -208,7 +190,16 @@ public:
   ///
   /// \note This explicitly also differentiates between the different integer types.
   /// So when the variant stores an Int32, IsA<Int64>() will return false, even though the types could be converted.
-  template <typename T>
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::DirectCast, int> = 0>
+  bool IsA() const; // [tested]
+
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::PointerCast, int> = 0>
+  bool IsA() const; // [tested]
+
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::TypedObject, int> = 0>
+  bool IsA() const; // [tested]
+
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::ObjectCast, int> = 0>
   bool IsA() const; // [tested]
 
   /// \brief Returns the exact ezVariant::Type value.
@@ -220,8 +211,17 @@ public:
   /// If the types don't match, this function will assert!
   /// So be careful to use this function only when you know exactly that the stored type matches the expected type.
   ///
-  /// Prefer to use ConvertTo() when you instead.
-  template <typename T>
+  /// Prefer to use ConvertTo() when you can instead.
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::DirectCast, int> = 0>
+  const T& Get() const; // [tested]
+
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::PointerCast, int> = 0>
+  T Get() const; // [tested]
+
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::TypedObject, int> = 0>
+  const T Get() const; // [tested]
+
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::ObjectCast, int> = 0>
   const T& Get() const; // [tested]
 
   /// \brief Returns a void* to the internal data.
@@ -229,6 +229,8 @@ public:
 
   /// \brief Returns a void* to the internal data.
   const void* GetData() const; // [tested]
+
+  const ezRTTI* GetReflectedType() const;
 
   /// \brief Returns the sub value at iIndex. This could be an element in an array or a member property inside a reflected type.
   ///
@@ -277,8 +279,8 @@ public:
   /// contain no useful value. Instead, store the other necessary data inside the functor object, before calling this function. For example,
   /// store a pointer to a variant inside the functor object and then call DispatchTo to execute the function that will handle the given
   /// type of the variant.
-  template <typename Functor>
-  static void DispatchTo(Functor& functor, Type::Enum type); // [tested]
+  template <typename Functor, class... Args>
+  static auto DispatchTo(Functor& functor, Type::Enum type, Args&&... args); // [tested]
 
   /// \brief Computes the hash value of the stored data. Returns uiSeed (unchanged) for an invalid Variant.
   ezUInt64 ComputeHash(ezUInt64 uiSeed = 0) const;
@@ -286,14 +288,18 @@ public:
 private:
   friend class ezVariantHelper;
   friend struct CompareFunc;
+  friend struct GetTypeFromVariantFunc;
 
   struct SharedData
   {
+    //ezTypedObject m_Obj;
     void* m_Ptr;
+    const ezRTTI* m_pType;
     ezAtomicInteger32 m_uiRef;
-    EZ_ALWAYS_INLINE SharedData(void* ptr)
+    EZ_ALWAYS_INLINE SharedData(void* ptr, const ezRTTI* pType)
       : m_Ptr(ptr)
       , m_uiRef(1)
+      , m_pType(pType)
     {
     }
     virtual ~SharedData() = default;
@@ -304,18 +310,33 @@ private:
   {
   private:
     T m_t;
-
   public:
-    EZ_ALWAYS_INLINE TypedSharedData(const T& value)
-      : SharedData(&m_t)
+    EZ_ALWAYS_INLINE TypedSharedData(const T& value, const ezRTTI* pType = nullptr)
+      : SharedData(&m_t, pType)
       , m_t(value)
     {
     }
   };
 
+  class RTTISharedData : public SharedData
+  {
+  public:
+    RTTISharedData(void* pData, const ezRTTI* pType);
+
+    ~RTTISharedData();
+  };
+
+  struct InlinedStruct
+  {
+    constexpr static int DataSize = 4 * sizeof(float) - sizeof(void*);
+    ezUInt8 m_Data[DataSize];
+    const ezRTTI* m_pType;
+  };
+
   union Data {
     float f[4];
     SharedData* shared;
+    InlinedStruct inlined;
   } m_Data;
 
   ezUInt32 m_Type : 31;
@@ -327,15 +348,60 @@ private:
   template <typename T>
   void InitShared(const T& value);
 
+  template <typename T>
+  void InitTypedObject(const T& value, ezTraitInt<0>);
+  template <typename T>
+  void InitTypedObject(const T& value, ezTraitInt<1>);
+
+  void InitTypedPointer(void* value, const ezRTTI* pType);
+
   void Release();
   void CopyFrom(const ezVariant& other);
   void MoveFrom(ezVariant&& other);
 
-  template <typename T>
-  T& Cast();
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::DirectCast, int> = 0>
+  const T& Cast() const
+  {
+    const bool validType = ezConversionTest<T, typename TypeDeduction<T>::StorageType>::sameType;
+    EZ_CHECK_AT_COMPILETIME_MSG(validType, "Invalid Cast, can only cast to storage type");
 
-  template <typename T>
-  const T& Cast() const;
+    return (sizeof(T) > sizeof(Data) || TypeDeduction<T>::forceSharing) ? *static_cast<const T*>(m_Data.shared->m_Ptr)
+      : *reinterpret_cast<const T*>(&m_Data);
+  }
+
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::PointerCast, int> = 0>
+  T Cast() const
+  {
+    const ezTypedPointer& ptr = *reinterpret_cast<const ezTypedPointer*>(&m_Data);
+
+    const ezRTTI* pType = GetReflectedType();
+    typedef typename ezTypeTraits<T>::NonConstReferencePointerType NonRefPtrT;
+    if constexpr (!std::is_same<T, void*>::value && !std::is_same<T, const void*>::value)
+    {
+      EZ_ASSERT_DEV(pType == nullptr || pType->IsDerivedFrom(ezGetStaticRTTI<NonRefPtrT>()), "Object of type '{0}' does not derive from '{}'", pType->GetTypeName(), ezGetStaticRTTI<NonRefPtrT>()->GetTypeName());
+    }
+    return static_cast<T>(ptr.m_pObject);
+  }
+
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::TypedObject, int> = 0>
+  const T Cast() const
+  {
+    ezTypedObject obj;
+    obj.m_pObject = GetData();
+    obj.m_pType = GetReflectedType();
+    return obj;
+  }
+
+  template <typename T, typename std::enable_if_t<ezVariantTypeDeduction<T>::classification == ezVariantClass::ObjectCast, int> = 0>
+  const T& Cast() const
+  {
+    const ezRTTI* pType = GetReflectedType();
+    typedef typename ezTypeTraits<T>::NonConstReferenceType NonRefT;
+    EZ_ASSERT_DEV(pType->IsDerivedFrom(ezGetStaticRTTI<NonRefT>()), "Object of type '{0}' does not derive from '{}'", pType->GetTypeName(), ezGetStaticRTTI<NonRefT>()->GetTypeName());
+
+    return (sizeof(T) > sizeof(Data) || TypeDeduction<T>::forceSharing) ? *static_cast<const T*>(m_Data.shared->m_Ptr)
+      : *reinterpret_cast<const T*>(&m_Data);
+  }
 
   static bool IsNumberStatic(ezUInt32 type);
   static bool IsFloatingPointStatic(ezUInt32 type);
@@ -347,28 +413,23 @@ private:
   T ConvertNumber() const;
 };
 
-using ezVariantType = ezVariant::Type;
 
-EZ_DEFINE_AS_POD_TYPE(ezVariant::Type::Enum);
-
-/// \brief An overload of ezDynamicCast for dynamic casting a variant to a type derived from ezReflectedClass.
+/// \brief An overload of ezDynamicCast for dynamic casting a variant to a pointer type.
 ///
-/// If the ezVariant stores an ezReflectedClass pointer, this pointer will be dynamicly cast to T*.
+/// If the ezVariant stores an ezTypedPointer pointer, this pointer will be dynamically cast to T*.
 /// If the ezVariant stores any other type (or nothing), nullptr is returned.
 template <typename T>
 EZ_ALWAYS_INLINE T ezDynamicCast(const ezVariant& variant)
 {
-  if (variant.IsA<ezReflectedClass*>())
+  if (variant.IsA<T>())
   {
-    ezReflectedClass* pRefC = variant.Get<ezReflectedClass*>();
-
-    return ezDynamicCast<T>(pRefC);
+    return variant.Get<T>();
   }
 
   return nullptr;
 }
 
 
-#include <Foundation/Types/Implementation/VariantHelper_inl.h>
-#include <Foundation/Types/Implementation/VariantTypeDeduction_inl.h>
 #include <Foundation/Types/Implementation/Variant_inl.h>
+#include <Foundation/Types/Implementation/VariantHelper_inl.h>
+

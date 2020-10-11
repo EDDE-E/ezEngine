@@ -74,8 +74,7 @@ struct ezIsStandardType
 {
   enum
   {
-    // TODO: Not quite correct.
-    value = ezVariant::TypeDeduction<C>::value != ezVariantType::Invalid,
+    value = ezVariant::TypeDeduction<C>::value >= ezVariantType::FirstStandardType && ezVariant::TypeDeduction<C>::value <= ezVariantType::LastStandardType,
   };
 };
 

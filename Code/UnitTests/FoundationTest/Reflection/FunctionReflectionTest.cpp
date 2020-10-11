@@ -367,6 +367,9 @@ EZ_CREATE_SIMPLE_TEST(Reflection, Functions)
     test.m_values.PushBack(ezVariant(&ps));
     test.m_values.PushBack(ezVariant(&value));
 
+   // ezVariantAdapter<ezTestStruct3 const*> aa(ezVariant(&value));
+    //auto bla = ezIsStandardType<ezTestStruct3 const*>::value;
+
     ezVariant ret(&retS);
     funccall.Execute(&test, test.m_values, ret);
     EZ_TEST_FLOAT(retS.m_fFloat1, 42, 0);
@@ -543,7 +546,7 @@ EZ_CREATE_SIMPLE_TEST(Reflection, Functions)
     values.PushBack((ezInt16)666);
     ezVariant ret;
     funccall.Execute(nullptr, values, ret);
-    EZ_TEST_BOOL(ret.GetType() == ezVariantType::VoidPointer);
+    EZ_TEST_BOOL(ret.GetType() == ezVariantType::TypedPointer);
     ezTestStruct3* pRet = static_cast<ezTestStruct3*>(ret.ConvertTo<void*>());
     EZ_TEST_BOOL(pRet != nullptr);
 
@@ -574,7 +577,7 @@ EZ_CREATE_SIMPLE_TEST(Reflection, Functions)
     values.PushBack(ezVariant(&s));
     ezVariant ret;
     funccall.Execute(nullptr, values, ret);
-    EZ_TEST_BOOL(ret.GetType() == ezVariantType::ReflectedPointer);
+    EZ_TEST_BOOL(ret.GetType() == ezVariantType::TypedPointer);
     ezTestClass1* pRet = static_cast<ezTestClass1*>(ret.ConvertTo<void*>());
     EZ_TEST_BOOL(pRet != nullptr);
 

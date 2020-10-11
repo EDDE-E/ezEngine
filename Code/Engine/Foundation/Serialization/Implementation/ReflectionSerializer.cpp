@@ -8,6 +8,7 @@
 #include <Foundation/Serialization/RttiConverter.h>
 #include <Foundation/Types/ScopeExit.h>
 #include <Foundation/IO/OpenDdlReader.h>
+#include <Foundation/Types/VariantTypeRegistry.h>
 
 ////////////////////////////////////////////////////////////////////////
 // ezReflectionSerializer public static functions
@@ -156,6 +157,7 @@ namespace
       return;
 
     const ezRTTI* pPropType = pProp->GetSpecificType();
+    const bool bIsValueType = !pProp->GetFlags().IsSet(ezPropertyFlags::Pointer) && (pProp->GetFlags().IsSet(ezPropertyFlags::StandardType) || ezVariantTypeRegistry::GetSingleton()->FindVariantTypeInfo(pPropType));
 
     ezVariant vTemp;
     switch (pProp->GetCategory())
@@ -172,7 +174,7 @@ namespace
           if (pProp->GetFlags().IsSet(ezPropertyFlags::PointerOwner) && pRefrencedObject)
           {
             pRefrencedObject = ezReflectionSerializer::Clone(pRefrencedObject, pPropType);
-            vTemp = pRefrencedObject;
+            vTemp = ezVariant(pRefrencedObject, pPropType);
           }
 
           ezVariant vOldValue = ezReflectionUtils::GetMemberPropertyValue(pSpecific, pClone);
@@ -182,7 +184,7 @@ namespace
         }
         else
         {
-          if (pProp->GetFlags().IsAnySet(ezPropertyFlags::IsEnum | ezPropertyFlags::Bitflags | ezPropertyFlags::StandardType))
+          if (bIsValueType || pProp->GetFlags().IsAnySet(ezPropertyFlags::IsEnum | ezPropertyFlags::Bitflags | ezPropertyFlags::StandardType))
           {
             vTemp = ezReflectionUtils::GetMemberPropertyValue(pSpecific, pObject);
             ezReflectionUtils::SetMemberPropertyValue(pSpecific, pClone, vTemp);
@@ -236,14 +238,14 @@ namespace
             if (pProp->GetFlags().IsSet(ezPropertyFlags::PointerOwner) && pRefrencedObject)
             {
               pRefrencedObject = ezReflectionSerializer::Clone(pRefrencedObject, pPropType);
-              vTemp = pRefrencedObject;
+              vTemp = ezVariant(pRefrencedObject, pPropType);
             }
             ezReflectionUtils::SetArrayPropertyValue(pSpecific, pClone, i, vTemp);
           }
         }
         else
         {
-          if (pSpecific->GetFlags().IsSet(ezPropertyFlags::StandardType))
+          if (bIsValueType)
           {
             for (ezUInt32 i = 0; i < uiCount; ++i)
             {
@@ -298,11 +300,11 @@ namespace
             {
               pRefrencedObject = ezReflectionSerializer::Clone(pRefrencedObject, pPropType);
             }
-            vTemp = pRefrencedObject;
+            vTemp = ezVariant(pRefrencedObject, pPropType);
             ezReflectionUtils::InsertSetPropertyValue(pSpecific, pClone, vTemp);
           }
         }
-        else if (pProp->GetFlags().IsSet(ezPropertyFlags::StandardType))
+        else if (bIsValueType)
         {
           for (ezUInt32 i = 0; i < values.GetCount(); ++i)
           {
@@ -336,7 +338,7 @@ namespace
 
         for (ezUInt32 i = 0; i < keys.GetCount(); ++i)
         {
-          if (pProp->GetFlags().IsSet(ezPropertyFlags::StandardType) ||
+          if (bIsValueType ||
               (pProp->GetFlags().IsSet(ezPropertyFlags::Pointer) && !pProp->GetFlags().IsSet(ezPropertyFlags::PointerOwner)))
           {
             ezVariant value = ezReflectionUtils::GetMapPropertyValue(pSpecific, pObject, keys[i]);
